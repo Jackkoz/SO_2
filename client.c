@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <pthread.h>
+#include "shared_lib.h"
 
 int main(int arguments_number, char* arguments[])
 {
     int resourceType = atoi(arguments[1]);
     int resourceAmount = atoi(arguments[2]);
+    // n – żądana liczba sztuk zasobu (1 <= n <= podłoga(N/2))
     int workTime = atoi(arguments[3]);
     int partnerPID;
 
@@ -13,6 +15,7 @@ int main(int arguments_number, char* arguments[])
         // Communicate the need for resource
 
         // Sleep on condition until woken up to work
+        // Or declare enough types to sleep on reading from queue
 
         // Receive co-worker PID, server has locked resources
         // partnerPID = recieve();
