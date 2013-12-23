@@ -11,22 +11,19 @@
 #include <stdlib.h>     // exit()
 #include <string.h>     // strlen()
 
+#include <errno.h>
+
 #include "shared_lib.h"
+
+ extern int errno;
 
 // Ids of queues used to communicate with server
 int SERVER_OUT, SERVER_REQUEST, SERVER_RELEASE;
-
-// Global mutex
-pthread_mutex_t mutex;
 
 void SIGINT_handler(int sig)
 {
     // Ignoring further SIGINT interrupts
     signal(SIGINT, SIG_IGN);
-
-    // Acquiring and deleting global mutex
-    pthread_mutex_lock(&mutex);
-        pthread_mutex_destroy(&mutex);
 
     // Deleting resource_mutexes
 
@@ -40,6 +37,8 @@ void SIGINT_handler(int sig)
     if (SERVER_OUT != -1)
         msgctl(SERVER_OUT, IPC_RMID, NULL);
 
+    printf("SERVER SHUTDOWN\n");
+
     exit(0);
 }
 
@@ -50,51 +49,93 @@ void serverShutdown()
 
 void *thread(void *arg)
 {
+    printf("THREAD CREATED\n");
     thread_arguments *arg_ptr = (thread_arguments*) arg;
     thread_arguments args = *arg_ptr;
 
-    // Lock resources on mutex
-    pthread_mutex_lock(&mutex);
+    // Check if you can work
+    pthread_mutex_lock(args.mutex);
     {
+        if (*args.awaiting == 1)
+            pthread_cond_wait(args.condition1, args.mutex);
+
+        // Declare awaiting for resources
+        *args.awaiting = 1;
+    }
+    pthread_mutex_unlock(args.mutex);
+
+    printf("checking for resources\n");
+
+    // Check for resources
+    pthread_mutex_lock(args.mutex);
+    {
+        while (*args.resource < (args.amount1 + args.amount2))
+            pthread_cond_wait(args.condition0, args.mutex);
+
+        // Lock resources
         *args.resource -= (args.amount1 + args.amount2);
 
         // Notify
-        printf("Wątek %d przydziela %d zasobów %d klientom %d %d, pozostało %d zasobów\n",
-            pthread_self(), args.amount1 + args.amount2, args.resourceType, args.PID1, args.PID2, *args.resource);
+        unsigned long my_tid = (unsigned long) pthread_self();
+        printf("Wątek %lu przydziela %d zasobów %d klientom %d %d, pozostało %d zasobów\n",
+            my_tid, args.amount1 + args.amount2, args.resourceType, args.PID1, args.PID2, *args.resource);
+
+        // Free waiting spot, signal someone sleeping on queue
+        *args.awaiting = 0;
+        pthread_cond_signal(args.condition1);
     }
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(args.mutex);
+
+    printf("Have resources\n");
 
     // Notify clients
-    message notification, *n_ptr;
+    message notification, *n_ptr = &notification;
 
     notification.PID = args.PID1;
     notification.resourceType = args.PID2;
-    msgsnd(SERVER_OUT, n_ptr, sizeof(notification) - sizeof(long), 0);
+    if (msgsnd(SERVER_OUT, n_ptr, sizeof(notification) - sizeof(long), 0) == -1)
+        serverShutdown();
+        // puts(strerror(errno));
 
     notification.PID = args.PID2;
     notification.resourceType = args.PID1;
-    msgsnd(SERVER_OUT, n_ptr, sizeof(notification) - sizeof(long), 0);
+    if (msgsnd(SERVER_OUT, n_ptr, sizeof(notification) - sizeof(long), 0) == -1)
+        serverShutdown();
+        // puts(strerror(errno));
+
+    printf("Notified clients, waiting for responses\n");
 
     // Await the responses, we don't need to actually read them
-    msgrcv(SERVER_RELEASE, n_ptr, args.PID1, sizeof(notification) - sizeof(long), 0);
-    msgrcv(SERVER_RELEASE, n_ptr, args.PID2, sizeof(notification) - sizeof(long), 0);
+    if (msgrcv(SERVER_RELEASE, n_ptr, args.PID1, sizeof(notification) - sizeof(long), 0) == -1)
+        serverShutdown();
+    if (msgrcv(SERVER_RELEASE, n_ptr, args.PID2, sizeof(notification) - sizeof(long), 0) == -1)
+        serverShutdown();
 
-    // Release resources
-    pthread_mutex_lock(&mutex);
+    printf("Clients are done\n");
+
+    // Release resources and wake thread waiting on premium spot
+    pthread_mutex_lock(args.mutex);
     {
         *args.resource += args.amount1 + args.amount2;
+        pthread_cond_signal(args.condition0);
     }
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(args.mutex);
+
+    printf("Thread finished\n");
 }
 
 int main(int arguments_number, char* arguments[])
 {
-    // Initializing global mutex
-    if (pthread_mutex_init(&mutex, NULL) != 0)
-        serverShutdown();
-
     // Setting up SIGINT capturing and processing
     signal(SIGINT, SIGINT_handler);
+
+    // Creating communication queues
+    SERVER_OUT = msgget(OUT_KEY,  0666 | IPC_CREAT);
+    SERVER_REQUEST = msgget(REQUEST_KEY,  0666 | IPC_CREAT);
+    SERVER_RELEASE = msgget(RELEASE_KEY,  0666 | IPC_CREAT);
+
+    if (SERVER_OUT == -1 || SERVER_RELEASE == -1 || SERVER_REQUEST == -1)
+        serverShutdown();
 
     // Initializing input data
     int resourcesNumber = atoi(arguments[1]);
@@ -107,14 +148,9 @@ int main(int arguments_number, char* arguments[])
 
     thread_arguments thread_input, *th_in = &thread_input;
 
-    pthread_cond_t queue[resourcesNumber + 1][2];
+    pthread_cond_t queue_cond[resourcesNumber + 1][2];
     pthread_mutex_t queue_mutex[resourcesNumber + 1];
     int numberOfAwaiting[resourcesNumber + 1][2];
-
-    // Creating communication queues
-    SERVER_OUT = msgget(OUT_KEY,  0666 | IPC_CREAT);
-    SERVER_REQUEST = msgget(REQUEST_KEY,  0666 | IPC_CREAT);
-    SERVER_RELEASE = msgget(RELEASE_KEY,  0666 | IPC_CREAT);
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -130,26 +166,32 @@ int main(int arguments_number, char* arguments[])
         numberOfAwaiting[loopCounter][1] = 0;
         if (pthread_mutex_init(&queue_mutex[loopCounter], NULL) != 0)
             serverShutdown();
-        if (pthread_cond_init (&queue[loopCounter][0], NULL) != 0)
+        if (pthread_cond_init (&queue_cond[loopCounter][0], NULL) != 0)
             serverShutdown();
-        if (pthread_cond_init (&queue[loopCounter][1], NULL) != 0)
+        if (pthread_cond_init (&queue_cond[loopCounter][1], NULL) != 0)
             serverShutdown();
     }
 
     while (1)
     {
         // Read a single request message of any type from queue
-        msgrcv(SERVER_REQUEST, rq_ptr, sizeof(request) - sizeof(long), 0, 0);
-        requestingPID = rq_ptr->PID;
-        requestedType = rq_ptr->resourceType;
-        requestedAmount = rq_ptr->resourceAmount;
+        if (msgrcv(SERVER_REQUEST, rq_ptr, sizeof(request) - sizeof(long), 0, 0) == -1)
+            serverShutdown();
+
+        requestingPID = request.PID;
+        requestedType = request.resourceType;
+        requestedAmount = request.resourceAmount;
 
         if (numberOfAwaiting[requestedType][1] == 0)
         {
             thread_input.resourceType = requestedType;
             thread_input.amount1 = requestedAmount;
             thread_input.PID1 = requestingPID;
-            *thread_input.resource = resources[requestedType];
+            thread_input.resource = &resources[requestedType];
+            thread_input.awaiting = &numberOfAwaiting[requestedType][0];
+            thread_input.mutex = &queue_mutex[requestedType];
+            thread_input.condition0 = &queue_cond[requestedType][0];
+            thread_input.condition1 = &queue_cond[requestedType][1];
             numberOfAwaiting[requestedType][1] = 1;
         }
         else
@@ -157,9 +199,10 @@ int main(int arguments_number, char* arguments[])
             thread_input.amount2 = requestedAmount;
             thread_input.PID2 = requestingPID;
             numberOfAwaiting[requestedType][1] = 0;
-            //create thread flag detached
+
+            // Create the thread for the pair
+            printf("I want to create a thread\n");
             if (pthread_create(id_ptr, &attr, thread, (void *)th_in) != 0)
-            // pthread_create(id_ptr, &attr, thread, (void *)th_in);
                 serverShutdown();
         }
     }

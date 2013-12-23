@@ -33,12 +33,17 @@ int main(int arguments_number, char* arguments[])
     while (1)
     {
         // Send request
-        msgsnd(SERVER_REQUEST, rq_ptr, sizeof(requestMessage) - sizeof(long), 0);
+        if (msgsnd(SERVER_REQUEST, rq_ptr, sizeof(requestMessage) - sizeof(long), 0) != 0)
+            exit(0);
+
+        printf("Sent request\n");
 
         // Receive co-worker PID; server has locked resources
         // If error then terminate yourself - server has deleted queues
-        if (msgrcv(SERVER_OUT, rc_ptr, getpid(), sizeof(requestMessage) - sizeof(long), 0) == -1)
+        if (msgrcv(SERVER_OUT, rc_ptr, getpid(), sizeof(receivedMessage) - sizeof(long), 0) == -1)
             exit(0);
+
+        printf("asd\n");
 
         // Obtain PID of partner
         partnerPID = receivedMessage.resourceType;
@@ -50,7 +55,8 @@ int main(int arguments_number, char* arguments[])
         sleep(workTime);
 
         // Notify the server about the end of work
-        msgsnd(SERVER_RELEASE, rq_ptr, sizeof(requestMessage) - sizeof(long), 0);
+        if (msgsnd(SERVER_REQUEST, rq_ptr, sizeof(requestMessage) - sizeof(long), 0) != 0)
+            exit(0);
 
         // Communicate end of work
         printf("%d KONIEC\n", getpid());

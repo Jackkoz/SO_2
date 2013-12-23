@@ -30,8 +30,9 @@ typedef struct thread_arguments
     int amount1, amount2;
     int PID1, PID2;
     int *resource;
-    pthread_mutex_t mutex;
-    pthread_cond_t condition;
+    int *awaiting;
+    pthread_mutex_t *mutex;
+    pthread_cond_t *condition0, *condition1;
 } thread_arguments;
 
 #endif
