@@ -30,38 +30,30 @@ int main(int arguments_number, char* arguments[])
     requestMessage.resourceType = resourceType;
     requestMessage.resourceAmount = resourceAmount;
 
-    while (1)
-    {
-        // Send request
-        if (msgsnd(SERVER_REQUEST, rq_ptr, sizeof(requestMessage) - sizeof(long), 0) != 0)
-            exit(0);
+    // Send request
+    if (msgsnd(SERVER_REQUEST, rq_ptr, sizeof(requestMessage) - sizeof(long), 0) != 0)
+        exit(0);
 
-        printf("Sent request\n");
-        printf("%d %ld\n", SERVER_OUT, myPID);
+    // Receive co-worker PID; server has locked resources
+    // If error then terminate yourself - server has deleted queues
+    if (msgrcv(SERVER_OUT, rc_ptr, sizeof(receivedMessage) - sizeof(long), myPID, 0) == -1)
+        exit(0);
 
-        // Receive co-worker PID; server has locked resources
-        // If error then terminate yourself - server has deleted queues
-        if (msgrcv(SERVER_OUT, rc_ptr, myPID, sizeof(receivedMessage) - sizeof(long), 0) == -1)
-            exit(0);
+    // Obtain PID of partner
+    partnerPID = receivedMessage.resourceType;
 
-        printf("asd\n");
+    // Communicate start of work
+    printf("%d %d %ld %ld\n", resourceType, resourceAmount, myPID, partnerPID);
 
-        // Obtain PID of partner
-        partnerPID = receivedMessage.resourceType;
+    // Actual work
+    sleep(workTime);
 
-        // Communicate start of work
-        printf("%d %d %ld %ld\n", resourceType, resourceAmount, myPID, partnerPID);
+    // Notify the server about the end of work
+    if (msgsnd(SERVER_RELEASE, rq_ptr, sizeof(requestMessage) - sizeof(long), 0) != 0)
+        exit(0);
 
-        // Actual work
-        sleep(workTime);
-
-        // Notify the server about the end of work
-        if (msgsnd(SERVER_REQUEST, rq_ptr, sizeof(requestMessage) - sizeof(long), 0) != 0)
-            exit(0);
-
-        // Communicate end of work
-        printf("%d KONIEC\n", getpid());
-    }
+    // Communicate end of work
+    printf("%d KONIEC\n", getpid());
 
     return 0;
 }

@@ -83,8 +83,6 @@ void *thread(void *arg)
     }
     pthread_mutex_unlock(args.mutex);
 
-    printf("Have resources\n");
-
     // Notify clients
     message notification, *n_ptr = &notification;
 
@@ -92,23 +90,17 @@ void *thread(void *arg)
     notification.resourceType = args.PID2;
     if (msgsnd(SERVER_OUT, n_ptr, sizeof(notification) - sizeof(long), 0) == -1)
         serverShutdown();
-        // puts(strerror(errno));
 
     notification.PID = args.PID2;
     notification.resourceType = args.PID1;
     if (msgsnd(SERVER_OUT, n_ptr, sizeof(notification) - sizeof(long), 0) == -1)
         serverShutdown();
-        // puts(strerror(errno));
-
-    printf("Notified clients, waiting for responses\n");
 
     // Await the responses, we don't need to actually read them
-    if (msgrcv(SERVER_RELEASE, n_ptr, args.PID1, sizeof(notification) - sizeof(long), 0) == -1)
+    if (msgrcv(SERVER_RELEASE, n_ptr, sizeof(notification) - sizeof(long), args.PID1, 0) == -1)
         serverShutdown();
-    if (msgrcv(SERVER_RELEASE, n_ptr, args.PID2, sizeof(notification) - sizeof(long), 0) == -1)
+    if (msgrcv(SERVER_RELEASE, n_ptr, sizeof(notification) - sizeof(long), args.PID2, 0) == -1)
         serverShutdown();
-
-    printf("Clients are done\n");
 
     // Release resources and wake thread waiting on premium spot
     pthread_mutex_lock(args.mutex);
@@ -118,7 +110,6 @@ void *thread(void *arg)
     }
     pthread_mutex_unlock(args.mutex);
 
-    printf("Thread finished\n");
 }
 
 int main(int arguments_number, char* arguments[])
@@ -143,7 +134,7 @@ int main(int arguments_number, char* arguments[])
     message request, *rq_ptr = &request;
     int requestingPID, requestedType, requestedAmount;
 
-    thread_arguments thread_input, *th_in = &thread_input;
+    thread_arguments thread_input[resourcesNumber + 1], *th_in;
 
     pthread_cond_t queue_cond[resourcesNumber + 1][2];
     pthread_mutex_t queue_mutex[resourcesNumber + 1];
@@ -153,7 +144,6 @@ int main(int arguments_number, char* arguments[])
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     pthread_t thread_id, *id_ptr = &thread_id;
-
 
     // Initializing the array of resources and awaiting processes
     for (loopCounter = 0; loopCounter <= resourcesNumber; loopCounter++)
@@ -181,21 +171,23 @@ int main(int arguments_number, char* arguments[])
 
         if (numberOfAwaiting[requestedType][1] == 0)
         {
-            thread_input.resourceType = requestedType;
-            thread_input.amount1 = requestedAmount;
-            thread_input.PID1 = requestingPID;
-            thread_input.resource = &resources[requestedType];
-            thread_input.awaiting = &numberOfAwaiting[requestedType][0];
-            thread_input.mutex = &queue_mutex[requestedType];
-            thread_input.condition0 = &queue_cond[requestedType][0];
-            thread_input.condition1 = &queue_cond[requestedType][1];
+            thread_input[requestedType].resourceType = requestedType;
+            thread_input[requestedType].amount1 = requestedAmount;
+            thread_input[requestedType].PID1 = requestingPID;
+            thread_input[requestedType].resource = &resources[requestedType];
+            thread_input[requestedType].awaiting = &numberOfAwaiting[requestedType][0];
+            thread_input[requestedType].mutex = &queue_mutex[requestedType];
+            thread_input[requestedType].condition0 = &queue_cond[requestedType][0];
+            thread_input[requestedType].condition1 = &queue_cond[requestedType][1];
             numberOfAwaiting[requestedType][1] = 1;
         }
         else
         {
-            thread_input.amount2 = requestedAmount;
-            thread_input.PID2 = requestingPID;
+            thread_input[requestedType].amount2 = requestedAmount;
+            thread_input[requestedType].PID2 = requestingPID;
             numberOfAwaiting[requestedType][1] = 0;
+
+            th_in = &thread_input[requestedType];
 
             // Create the thread for the pair
             printf("I want to create a thread\n");
