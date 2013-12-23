@@ -15,6 +15,9 @@
 
 // Ids of queues used to communicate with server
 int SERVER_OUT, SERVER_REQUEST, SERVER_RELEASE;
+int resourcesNumber;
+pthread_cond_t *cond_ptr;
+pthread_mutex_t *mutex_ptr;
 
 void SIGINT_handler(int sig)
 {
@@ -22,10 +25,18 @@ void SIGINT_handler(int sig)
     signal(SIGINT, SIG_IGN);
 
     // Deleting resource_mutexes and conditions
-    // int loop = 0;
-    // for (loop; loop < )
-
-    // Deleting conditions
+    int loop = 0;
+    for (loop; loop <= resourcesNumber; loop++)
+    {
+        pthread_mutex_lock(&mutex_ptr[loop]);
+        {
+            pthread_cond_signal(&cond_ptr[2*loop]);
+            pthread_cond_destroy(&cond_ptr[2*loop]);
+            pthread_cond_broadcast(&cond_ptr[2*loop + 1]);
+            pthread_cond_destroy(&cond_ptr[2*loop+1]);
+            pthread_mutex_destroy(&mutex_ptr[loop]);
+        }
+    }
 
     // Deleting queues
     if (SERVER_REQUEST != -1)
@@ -113,7 +124,7 @@ void *thread(void *arg)
 int main(int arguments_number, char* arguments[])
 {
     // Setting up SIGINT capturing and processing
-    if (signal(SIGINT, SIGINT_handler) == SIG_IGN)
+    signal(SIGINT, SIGINT_handler);
 
     // Creating communication queues
     SERVER_OUT = msgget(OUT_KEY,  0666 | IPC_CREAT);
@@ -124,7 +135,7 @@ int main(int arguments_number, char* arguments[])
         serverShutdown();
 
     // Initializing input data
-    int resourcesNumber = atoi(arguments[1]);
+    resourcesNumber = atoi(arguments[1]);
     int resourcesAmount = atoi(arguments[2]);
     int resources[resourcesNumber + 1];
     int loopCounter;
@@ -135,7 +146,9 @@ int main(int arguments_number, char* arguments[])
     thread_arguments thread_input[resourcesNumber + 1], *th_in;
 
     pthread_cond_t queue_cond[resourcesNumber + 1][2];
+    cond_ptr = &queue_cond[0][0];
     pthread_mutex_t queue_mutex[resourcesNumber + 1];
+    mutex_ptr = &queue_mutex[0];
     int numberOfAwaiting[resourcesNumber + 1][2];
 
     pthread_attr_t attr;
