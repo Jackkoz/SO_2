@@ -1,3 +1,9 @@
+/*
+ * Jacek
+ * Koziński
+ * 334678
+ */
+
 #include <stdio.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -15,25 +21,27 @@ int main(int arguments_number, char* arguments[])
     int resourceType = atoi(arguments[1]);
     int resourceAmount = atoi(arguments[2]);
     int workTime = atoi(arguments[3]);
-    int partnerPID;
+
     message receivedMessage, requestMessage;
     message *rc_ptr = &receivedMessage, *rq_ptr = &requestMessage;
+    int partnerPID;
 
-    requestMessage.type = resourceType;
-    sprintf(requestMessage.text, "%d", resourceAmount);
+    requestMessage.PID = getpid();
+    requestMessage.resourceType = resourceType;
+    requestMessage.resourceAmount = resourceAmount;
 
     while (1)
     {
-        // Communicate the need for resource
-        msgsnd(SERVER_REQUEST, rq_ptr, strlen(requestMessage.text) + 1, 0);
+        // Send request
+        msgsnd(SERVER_REQUEST, rq_ptr, sizeof(requestMessage) - sizeof(long), 0);
 
         // Receive co-worker PID; server has locked resources
         // If error then terminate yourself - server has deleted queues
-        if (msgrcv(SERVER_OUT, rc_ptr, getpid(), resourceType, 0) == -1)
+        if (msgrcv(SERVER_OUT, rc_ptr, getpid(), sizeof(requestMessage) - sizeof(long), 0) == -1)
             exit(0);
 
         // Obtain PID of partner
-        partnerPID = atoi(receivedMessage.text);
+        partnerPID = receivedMessage.resourceType;
 
         // Communicate start of work
         printf("%d %d %d %d\n", resourceType, resourceAmount, getpid(), partnerPID);
@@ -41,8 +49,8 @@ int main(int arguments_number, char* arguments[])
         // Actual work
         sleep(workTime);
 
-        // Coummunicate the release of resources
-        msgsnd(SERVER_RELEASE, rq_ptr, strlen(requestMessage.text) + 1, 0);
+        // Notify the server about the end of work
+        msgsnd(SERVER_RELEASE, rq_ptr, sizeof(requestMessage) - sizeof(long), 0);
 
         // Communicate end of work
         printf("%d KONIEC\n", getpid());

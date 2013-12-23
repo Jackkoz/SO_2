@@ -6,7 +6,7 @@ client:
 	$(CC) client.c shared_lib.c -o klient
 
 server: 
-	$(CC) server.c shared_lib.c -o serwer
+	$(CC) -pthread server.c shared_lib.c -o serwer
 
 clean:
 	rm -rf *o
