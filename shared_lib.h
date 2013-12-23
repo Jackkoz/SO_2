@@ -28,7 +28,7 @@ typedef struct thread_arguments
 {
     int resourceType;
     int amount1, amount2;
-    int PID1, PID2;
+    long PID1, PID2;
     int *resource;
     int *awaiting;
     pthread_mutex_t *mutex;

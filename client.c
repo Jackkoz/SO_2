@@ -14,9 +14,9 @@ int main(int arguments_number, char* arguments[])
 {
     // Ids of queues used to communicate with server
     int SERVER_OUT, SERVER_REQUEST, SERVER_RELEASE;
-    SERVER_OUT = msgget(OUT_KEY, 0);
-    SERVER_REQUEST = msgget(REQUEST_KEY, 0);
-    SERVER_RELEASE = msgget(RELEASE_KEY, 0);
+    SERVER_OUT = msgget(OUT_KEY, 0666);
+    SERVER_REQUEST = msgget(REQUEST_KEY, 0666);
+    SERVER_RELEASE = msgget(RELEASE_KEY, 0666);
 
     int resourceType = atoi(arguments[1]);
     int resourceAmount = atoi(arguments[2]);
@@ -24,9 +24,9 @@ int main(int arguments_number, char* arguments[])
 
     message receivedMessage, requestMessage;
     message *rc_ptr = &receivedMessage, *rq_ptr = &requestMessage;
-    int partnerPID;
+    long partnerPID, myPID = getpid();
 
-    requestMessage.PID = getpid();
+    requestMessage.PID = myPID;
     requestMessage.resourceType = resourceType;
     requestMessage.resourceAmount = resourceAmount;
 
@@ -37,10 +37,11 @@ int main(int arguments_number, char* arguments[])
             exit(0);
 
         printf("Sent request\n");
+        printf("%d %ld\n", SERVER_OUT, myPID);
 
         // Receive co-worker PID; server has locked resources
         // If error then terminate yourself - server has deleted queues
-        if (msgrcv(SERVER_OUT, rc_ptr, getpid(), sizeof(receivedMessage) - sizeof(long), 0) == -1)
+        if (msgrcv(SERVER_OUT, rc_ptr, myPID, sizeof(receivedMessage) - sizeof(long), 0) == -1)
             exit(0);
 
         printf("asd\n");
@@ -49,7 +50,7 @@ int main(int arguments_number, char* arguments[])
         partnerPID = receivedMessage.resourceType;
 
         // Communicate start of work
-        printf("%d %d %d %d\n", resourceType, resourceAmount, getpid(), partnerPID);
+        printf("%d %d %ld %ld\n", resourceType, resourceAmount, myPID, partnerPID);
 
         // Actual work
         sleep(workTime);

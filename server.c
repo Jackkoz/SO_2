@@ -37,7 +37,7 @@ void SIGINT_handler(int sig)
     if (SERVER_OUT != -1)
         msgctl(SERVER_OUT, IPC_RMID, NULL);
 
-    printf("SERVER SHUTDOWN\n");
+    printf("\nSERVER SHUTDOWN\n");
 
     exit(0);
 }
@@ -49,7 +49,6 @@ void serverShutdown()
 
 void *thread(void *arg)
 {
-    printf("THREAD CREATED\n");
     thread_arguments *arg_ptr = (thread_arguments*) arg;
     thread_arguments args = *arg_ptr;
 
@@ -64,8 +63,6 @@ void *thread(void *arg)
     }
     pthread_mutex_unlock(args.mutex);
 
-    printf("checking for resources\n");
-
     // Check for resources
     pthread_mutex_lock(args.mutex);
     {
@@ -77,7 +74,7 @@ void *thread(void *arg)
 
         // Notify
         unsigned long my_tid = (unsigned long) pthread_self();
-        printf("Wątek %lu przydziela %d zasobów %d klientom %d %d, pozostało %d zasobów\n",
+        printf("Wątek %lu przydziela %d zasobów %d klientom %ld %ld, pozostało %d zasobów\n",
             my_tid, args.amount1 + args.amount2, args.resourceType, args.PID1, args.PID2, *args.resource);
 
         // Free waiting spot, signal someone sleeping on queue
