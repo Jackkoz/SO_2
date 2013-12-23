@@ -22,18 +22,18 @@ int main(int arguments_number, char* arguments[])
     int resourceType = atoi(arguments[1]);
     int resourceAmount = atoi(arguments[2]);
     int workTime = atoi(arguments[3]);
+    int myPID = getpid();
 
     message receivedMessage, requestMessage;
     message *rc_ptr = &receivedMessage, *rq_ptr = &requestMessage;
     long partnerPID;
-    int myPID = getpid();
 
     requestMessage.PID = myPID;
     requestMessage.resourceType = resourceType;
     requestMessage.resourceAmount = resourceAmount;
 
     // Send request
-    if (msgsnd(SERVER_REQUEST, rq_ptr, sizeof(requestMessage) - sizeof(long), 0) != 0)
+    if (msgsnd(SERVER_REQUEST, rq_ptr, sizeof(requestMessage) - sizeof(long), 0) == -1)
         exit(0);
 
     // Receive co-worker PID; server has locked resources
@@ -51,7 +51,7 @@ int main(int arguments_number, char* arguments[])
     sleep(workTime);
 
     // Notify the server about the end of work
-    if (msgsnd(SERVER_RELEASE, rq_ptr, sizeof(requestMessage) - sizeof(long), 0) != 0)
+    if (msgsnd(SERVER_RELEASE, rq_ptr, sizeof(requestMessage) - sizeof(long), 0) == -1)
         exit(0);
 
     // Communicate end of work

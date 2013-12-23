@@ -16,6 +16,8 @@
 // Ids of queues used to communicate with server
 int SERVER_OUT, SERVER_REQUEST, SERVER_RELEASE;
 int resourcesNumber;
+
+// Used as pointers to arrays of mutexes and conditions for resources
 pthread_cond_t *cond_ptr;
 pthread_mutex_t *mutex_ptr;
 
@@ -45,8 +47,6 @@ void SIGINT_handler(int sig)
         msgctl(SERVER_RELEASE, IPC_RMID, NULL);
     if (SERVER_OUT != -1)
         msgctl(SERVER_OUT, IPC_RMID, NULL);
-
-    printf("\nSERVER SHUTDOWN\n");
 
     exit(0);
 }
@@ -145,10 +145,16 @@ int main(int arguments_number, char* arguments[])
 
     thread_arguments thread_input[resourcesNumber + 1], *th_in;
 
+    // queue_cond[n][0] indicates whether a thread is currently waiting for enough of resource n
+    // (only 0 or 1 in terms of value) while queue_cond[n][1] stores the rest of threads.
     pthread_cond_t queue_cond[resourcesNumber + 1][2];
     cond_ptr = &queue_cond[0][0];
+
+    // Mutexes for every resource type
     pthread_mutex_t queue_mutex[resourcesNumber + 1];
     mutex_ptr = &queue_mutex[0];
+
+    //indicates number of threads waiting on queue_cond[n][0] and awaiting pairing on resource n
     int numberOfAwaiting[resourcesNumber + 1][2];
 
     pthread_attr_t attr;
@@ -180,6 +186,7 @@ int main(int arguments_number, char* arguments[])
         requestedType = request.resourceType;
         requestedAmount = request.resourceAmount;
 
+        // Store the data
         if (numberOfAwaiting[requestedType][1] == 0)
         {
             thread_input[requestedType].resourceType = requestedType;
