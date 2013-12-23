@@ -53,7 +53,7 @@ int main(int arguments_number, char* arguments[])
         exit(0);
 
     // Communicate end of work
-    printf("%d KONIEC\n", getpid());
+    printf("%ld KONIEC\n", myPID);
 
     return 0;
 }

@@ -25,7 +25,9 @@ void SIGINT_handler(int sig)
     // Ignoring further SIGINT interrupts
     signal(SIGINT, SIG_IGN);
 
-    // Deleting resource_mutexes
+    // Deleting resource_mutexes and conditions
+    // int loop = 0;
+    // for (loop; loop < )
 
     // Deleting conditions
 
