@@ -11,11 +11,7 @@
 #include <stdlib.h>     // exit()
 #include <string.h>     // strlen()
 
-#include <errno.h>
-
 #include "shared_lib.h"
-
- extern int errno;
 
 // Ids of queues used to communicate with server
 int SERVER_OUT, SERVER_REQUEST, SERVER_RELEASE;
@@ -117,7 +113,7 @@ void *thread(void *arg)
 int main(int arguments_number, char* arguments[])
 {
     // Setting up SIGINT capturing and processing
-    signal(SIGINT, SIGINT_handler);
+    if (signal(SIGINT, SIGINT_handler) == SIG_IGN)
 
     // Creating communication queues
     SERVER_OUT = msgget(OUT_KEY,  0666 | IPC_CREAT);
@@ -192,7 +188,6 @@ int main(int arguments_number, char* arguments[])
             th_in = &thread_input[requestedType];
 
             // Create the thread for the pair
-            printf("I want to create a thread\n");
             if (pthread_create(id_ptr, &attr, thread, (void *)th_in) != 0)
                 serverShutdown();
         }

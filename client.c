@@ -8,7 +8,12 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <errno.h>
+
 #include "shared_lib.h"
+
+ int errno;
 
 int main(int arguments_number, char* arguments[])
 {
@@ -24,7 +29,8 @@ int main(int arguments_number, char* arguments[])
 
     message receivedMessage, requestMessage;
     message *rc_ptr = &receivedMessage, *rq_ptr = &requestMessage;
-    long partnerPID, myPID = getpid();
+    long partnerPID;
+    int myPID = getpid();
 
     requestMessage.PID = myPID;
     requestMessage.resourceType = resourceType;
@@ -32,28 +38,38 @@ int main(int arguments_number, char* arguments[])
 
     // Send request
     if (msgsnd(SERVER_REQUEST, rq_ptr, sizeof(requestMessage) - sizeof(long), 0) != 0)
+    {
+        printf("Wysyłanie requesta\n");
         exit(0);
+    }
 
     // Receive co-worker PID; server has locked resources
     // If error then terminate yourself - server has deleted queues
     if (msgrcv(SERVER_OUT, rc_ptr, sizeof(receivedMessage) - sizeof(long), myPID, 0) == -1)
+    {
+        puts(strerror(errno));
+        printf("odbieranie outa\n");
         exit(0);
+    }
 
     // Obtain PID of partner
     partnerPID = receivedMessage.resourceType;
 
     // Communicate start of work
-    printf("%d %d %ld %ld\n", resourceType, resourceAmount, myPID, partnerPID);
+    printf("%d %d %d %ld\n", resourceType, resourceAmount, myPID, partnerPID);
 
     // Actual work
     sleep(workTime);
 
     // Notify the server about the end of work
     if (msgsnd(SERVER_RELEASE, rq_ptr, sizeof(requestMessage) - sizeof(long), 0) != 0)
+    {
+        printf("wysyłanie release\n");
         exit(0);
+    }
 
     // Communicate end of work
-    printf("%ld KONIEC\n", myPID);
+    printf("%d KONIEC\n", myPID);
 
     return 0;
 }
