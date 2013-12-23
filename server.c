@@ -119,6 +119,8 @@ void *thread(void *arg)
     }
     pthread_mutex_unlock(args.mutex);
 
+    free(arg_ptr);
+
 }
 
 int main(int arguments_number, char* arguments[])
@@ -143,7 +145,7 @@ int main(int arguments_number, char* arguments[])
     message request, *rq_ptr = &request;
     int requestingPID, requestedType, requestedAmount;
 
-    thread_arguments thread_input[resourcesNumber + 1], *th_in;
+    thread_arguments *thread_input[resourcesNumber + 1];
 
     // queue_cond[n][0] indicates whether a thread is currently waiting for enough of resource n
     // (only 0 or 1 in terms of value) while queue_cond[n][1] stores the rest of threads.
@@ -189,26 +191,25 @@ int main(int arguments_number, char* arguments[])
         // Store the data
         if (numberOfAwaiting[requestedType][1] == 0)
         {
-            thread_input[requestedType].resourceType = requestedType;
-            thread_input[requestedType].amount1 = requestedAmount;
-            thread_input[requestedType].PID1 = requestingPID;
-            thread_input[requestedType].resource = &resources[requestedType];
-            thread_input[requestedType].awaiting = &numberOfAwaiting[requestedType][0];
-            thread_input[requestedType].mutex = &queue_mutex[requestedType];
-            thread_input[requestedType].condition0 = &queue_cond[requestedType][0];
-            thread_input[requestedType].condition1 = &queue_cond[requestedType][1];
+            thread_input[requestedType] = (thread_arguments*)malloc(sizeof(thread_arguments));
+            thread_input[requestedType]->resourceType = requestedType;
+            thread_input[requestedType]->amount1 = requestedAmount;
+            thread_input[requestedType]->PID1 = requestingPID;
+            thread_input[requestedType]->resource = &resources[requestedType];
+            thread_input[requestedType]->awaiting = &numberOfAwaiting[requestedType][0];
+            thread_input[requestedType]->mutex = &queue_mutex[requestedType];
+            thread_input[requestedType]->condition0 = &queue_cond[requestedType][0];
+            thread_input[requestedType]->condition1 = &queue_cond[requestedType][1];
             numberOfAwaiting[requestedType][1] = 1;
         }
         else
         {
-            thread_input[requestedType].amount2 = requestedAmount;
-            thread_input[requestedType].PID2 = requestingPID;
+            thread_input[requestedType]->amount2 = requestedAmount;
+            thread_input[requestedType]->PID2 = requestingPID;
             numberOfAwaiting[requestedType][1] = 0;
 
-            th_in = &thread_input[requestedType];
-
             // Create the thread for the pair
-            if (pthread_create(id_ptr, &attr, thread, (void *)th_in) != 0)
+            if (pthread_create(id_ptr, &attr, thread, (void *)thread_input[requestedType]) != 0)
                 serverShutdown();
         }
     }
